@@ -22,43 +22,45 @@ PRICE_LOG_FILE = "price_history.json"
 def extract_price_from_html(html_content):
     """Extract the sale price from Vuori product page"""
     try:
+        import re
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # Look for sale price in the page
-        # Vuori uses pattern: "Original price $298. Sale price $238.$298$238"
-        # We need to find the actual price value
+        # Vuori's product page has this pattern:
+        # "Original price $298. Sale price $238.$298$238"
+        # We want to extract the sale price (the lower amount)
         
-        # Try multiple selectors to find the price
-        price_patterns = [
-            'span[class*="price"]',
-            '[data-price]',
-            'div[class*="Sale price"]'
-        ]
-        
-        # Search for text containing price pattern
         text = soup.get_text()
         
-        # Find the line with sale price
-        for line in text.split('\n'):
-            line = line.strip()
-            if 'Sale price' in line or '$' in line:
-                # Extract numbers that look like prices ($XXX)
-                import re
-                matches = re.findall(r'\$(\d+(?:\.\d{2})?)', line)
-                if matches:
-                    # Return the last price found (usually the sale price)
-                    return float(matches[-1])
+        # Look for the pattern: "Original price $XXX. Sale price $YYY"
+        pattern = r'Original price \$(\d+(?:\.\d{2})?)\.\s*Sale price \$(\d+(?:\.\d{2})?)'
+        match = re.search(pattern, text)
         
-        # Fallback: look for any price in common price format
-        import re
-        prices = re.findall(r'\$(\d+(?:\.\d{2})?)', text)
-        if prices:
-            # Usually sale price is listed after original, so take the last one
-            # But Vuori format shows both, so we need to find the smaller one
-            prices = [float(p) for p in prices]
-            prices = [p for p in prices if p < 500]  # Filter out unrealistic prices
-            if prices:
-                return min(prices)
+        if match:
+            original_price = float(match.group(1))
+            sale_price = float(match.group(2))
+            print(f"Debug: Found original ${original_price:.2f}, sale ${sale_price:.2f}")
+            return sale_price
+        
+        # Fallback: Look for just "Sale price $XXX"
+        pattern_fallback = r'Sale price \$(\d+(?:\.\d{2})?)'
+        match = re.search(pattern_fallback, text)
+        if match:
+            price = float(match.group(1))
+            print(f"Debug: Found sale price ${price:.2f} (pattern 2)")
+            return price
+        
+        # Last resort: find all prices and return the most reasonable one
+        # (between $50 and $500, which should be clothing price range)
+        all_prices = re.findall(r'\$(\d+(?:\.\d{2})?)', text)
+        if all_prices:
+            prices = [float(p) for p in all_prices]
+            # Filter to reasonable clothing price range
+            valid_prices = [p for p in prices if 50 < p < 500]
+            if valid_prices:
+                # Return the lowest price in the valid range (likely the sale price)
+                price = min(valid_prices)
+                print(f"Debug: Found price ${price:.2f} (fallback)")
+                return price
         
         return None
     except Exception as e:
