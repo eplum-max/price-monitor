@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 # Configuration
 PRODUCT_URL = "https://vuoriclothing.com/products/steadfast-insulated-full-zip-jacket-blue-coast"
 PRICE_THRESHOLD = 200.00
-EMAIL_RECIPIENT = "eric.slivka@gmail.com"
+EMAIL_RECIPIENT = "slivka.eric.w@gmail.com"
 PRICE_LOG_FILE = "price_history.json"
 
 def extract_price_from_html(html_content):
