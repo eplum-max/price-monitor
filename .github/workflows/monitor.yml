@@ -11,6 +11,8 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout code
@@ -34,8 +36,8 @@ jobs:
       
       - name: Commit price history
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
           git add price_history.json
           git commit -m "Update price history $(date -u +'%Y-%m-%d %H:%M:%S')" || echo "No changes to commit"
           git push
