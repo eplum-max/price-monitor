@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup
 from typing import List, Dict
 
 # Configuration
-EMAIL_RECIPIENT = "slivka.eric.w@gmail.com"
+EMAIL_RECIPIENT = "eric.slivka@gmail.com"
 DISCOUNT_THRESHOLD = 50.0  # 50% or more
 VALID_SIZES = ['M', 'L', 'Medium', 'Large']
 MIN_SIZE_KEYWORDS = ['M', 'L', 'medium', 'large']
@@ -75,38 +75,59 @@ class VuoriMonitor:
             
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Look for product cards - Vuori uses specific classes
-            product_links = soup.find_all('a', {'class': re.compile('product-card|ProductCard')})
+            # Multiple selectors to find product links - Vuori may have different HTML
+            product_links = []
             
-            if not product_links:
-                # Fallback: look for any links with product URLs
-                product_links = soup.find_all('a', href=re.compile(r'/products/'))
+            # Try selector 1: product-card classes
+            product_links = soup.find_all('a', {'class': re.compile('product-card|ProductCard|product_card')})
+            print(f"Selector 1 (product-card classes): Found {len(product_links)} links")
             
-            print(f"Found {len(product_links)} potential product links on Vuori sale page")
+            if not product_links or len(product_links) < 5:
+                # Try selector 2: Any link with /products/ in href
+                product_links = soup.find_all('a', href=re.compile(r'/products/[^?#]*'))
+                print(f"Selector 2 (product URLs): Found {len(product_links)} links")
+            
+            if not product_links or len(product_links) < 5:
+                # Try selector 3: Look for data-product attributes
+                product_elements = soup.find_all(['div', 'a'], {'data-product': True})
+                product_links = [elem.find('a', href=re.compile(r'/products/')) 
+                               for elem in product_elements]
+                product_links = [link for link in product_links if link]
+                print(f"Selector 3 (data-product): Found {len(product_links)} links")
+            
+            print(f"Total product links found on Vuori sale page: {len(product_links)}")
+            
+            seen_urls = set()
+            success_count = 0
             
             for link in product_links:
                 try:
                     product_url = link.get('href', '')
-                    if not product_url:
+                    if not product_url or product_url in seen_urls:
                         continue
+                    
+                    seen_urls.add(product_url)
                     
                     if not product_url.startswith('http'):
                         product_url = self.base_url + product_url
                     
-                    # Extract product name from link
+                    # Extract product name from link or surrounding elements
                     product_name = link.get_text(strip=True)
                     if not product_name:
-                        continue
+                        # Try to extract from URL
+                        product_name = product_url.split('/products/')[-1].replace('-', ' ').title()
                     
                     # Fetch product page to get detailed info
                     item = self._get_product_details(product_url, product_name)
                     if item:
                         self.items.append(item)
+                        success_count += 1
                 
                 except Exception as e:
                     print(f"Error processing product link: {e}")
                     continue
             
+            print(f"Vuori results: {success_count} items found with 50%+ discount")
             return self.items
         
         except Exception as e:
@@ -208,6 +229,8 @@ class MarineLayerMonitor:
             print(f"Found {len(product_links)} potential product links on Marine Layer Last Call")
             
             seen_urls = set()
+            failed_count = 0
+            success_count = 0
             
             for link in product_links:
                 try:
@@ -220,20 +243,48 @@ class MarineLayerMonitor:
                     if not product_url.startswith('http'):
                         product_url = self.base_url + product_url
                     
-                    # Fetch product details
-                    item = self._get_product_details(product_url)
+                    # Fetch product details with retry logic
+                    item = self._get_product_details_with_retry(product_url)
                     if item:
                         self.items.append(item)
-                
+                        success_count += 1
+                    
+                except requests.exceptions.Timeout:
+                    failed_count += 1
+                    print(f"Timeout on {product_url} (attempt failed, continuing...)")
+                    continue
+                except requests.exceptions.ConnectionError:
+                    failed_count += 1
+                    print(f"Connection error on {product_url} (continuing...)")
+                    continue
                 except Exception as e:
+                    failed_count += 1
                     print(f"Error processing Marine Layer product: {e}")
                     continue
             
+            print(f"Marine Layer results: {success_count} items found, {failed_count} items failed")
             return self.items
         
         except Exception as e:
             print(f"Error fetching Marine Layer Last Call items: {e}")
             return []
+    
+    def _get_product_details_with_retry(self, url: str, max_retries: int = 2) -> DiscountItem | None:
+        """Fetch product details with retry logic for timeouts"""
+        for attempt in range(max_retries):
+            try:
+                return self._get_product_details(url)
+            except requests.exceptions.Timeout:
+                if attempt < max_retries - 1:
+                    print(f"Timeout on {url}, retrying (attempt {attempt + 1}/{max_retries})")
+                    continue
+                else:
+                    print(f"Timeout on {url} after {max_retries} attempts, skipping")
+                    return None
+            except Exception as e:
+                print(f"Error on {url}: {e}")
+                return None
+        return None
     
     def _get_product_details(self, url: str) -> DiscountItem | None:
         """Fetch detailed product info from Marine Layer product page"""
@@ -465,25 +516,39 @@ def main():
     
     # Monitor Vuori
     print("\nMonitoring Vuori...")
+    print(f"URL: {VuoriMonitor().sale_url}")
     vuori = VuoriMonitor()
     vuori_items = vuori.fetch_sale_items()
-    print(f"Found {len(vuori_items)} Vuori items with 50%+ discount in M/L sizes")
+    print(f"Result: Found {len(vuori_items)} Vuori items with 50%+ discount in M/L sizes")
+    for item in vuori_items[:3]:  # Show first 3 items for debugging
+        print(f"  - {item.name}: {item.discount_percent:.0f}% off (${item.sale_price:.2f})")
     
     # Monitor Marine Layer
     print("\nMonitoring Marine Layer Last Call...")
+    print(f"URL: {MarineLayerMonitor().last_call_url}")
     marine_layer = MarineLayerMonitor()
     marine_layer_items = marine_layer.fetch_last_call_items()
-    print(f"Found {len(marine_layer_items)} Marine Layer Last Call items in M/L sizes")
+    print(f"Result: Found {len(marine_layer_items)} Marine Layer Last Call items in M/L sizes")
+    for item in marine_layer_items[:3]:  # Show first 3 items for debugging
+        print(f"  - {item.name}: {item.discount_percent:.0f}% off (${item.sale_price:.2f})")
     
     # Save history
+    print("\nSaving digest history...")
     save_digest_history(vuori_items, marine_layer_items)
+    print(f"Digest history saved with {len(vuori_items)} Vuori + {len(marine_layer_items)} Marine Layer items")
     
     # Send email digest
-    if vuori_items or marine_layer_items:
-        print("\nSending email digest...")
-        send_email_digest(vuori_items, marine_layer_items)
+    total_items = len(vuori_items) + len(marine_layer_items)
+    if total_items > 0:
+        print(f"\nSending email digest with {total_items} items...")
+        success = send_email_digest(vuori_items, marine_layer_items)
+        if success:
+            print("✓ Email digest sent successfully!")
+        else:
+            print("✗ Email digest failed to send")
     else:
-        print("\nNo items found - email not sent")
+        print("\nNo items found across both retailers - email not sent")
+        print("This is normal if there are no matching sales this week")
 
 if __name__ == "__main__":
     main()
