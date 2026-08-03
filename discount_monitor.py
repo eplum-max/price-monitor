@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup
 from typing import List, Dict
 
 # Configuration
-EMAIL_RECIPIENT = "eric.slivka@gmail.com"
+EMAIL_RECIPIENT = "slivka.eric.w@gmail.com"
 DISCOUNT_THRESHOLD = 50.0  # 50% or more
 VALID_SIZES = ['M', 'L', 'Medium', 'Large']
 MIN_SIZE_KEYWORDS = ['M', 'L', 'medium', 'large']
