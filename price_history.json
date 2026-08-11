@@ -183,5 +183,10 @@
     "timestamp": "2026-08-11T01:23:37.428593",
     "price": 238.0,
     "alerted": false
+  },
+  {
+    "timestamp": "2026-08-11T07:01:14.274985",
+    "price": 238.0,
+    "alerted": false
   }
 ]
