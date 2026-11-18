@@ -1933,5 +1933,10 @@
     "timestamp": "2026-11-17T15:27:37.873778",
     "price": 208.0,
     "alerted": false
+  },
+  {
+    "timestamp": "2026-11-18T00:28:39.898686",
+    "price": 208.0,
+    "alerted": false
   }
 ]
