@@ -2048,5 +2048,10 @@
     "timestamp": "2026-11-27T01:27:51.600463",
     "price": 208.0,
     "alerted": false
+  },
+  {
+    "timestamp": "2026-11-27T16:05:00.692595",
+    "price": 208.0,
+    "alerted": false
   }
 ]
